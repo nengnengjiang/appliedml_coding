@@ -304,6 +304,9 @@ grid_search.best_score_
 from sklearn.model_selection import cross_val_predict
 
 # y_pred = best_model.predict_proba(X_test)[:, 1]
+# or
+#y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
+
 y_train_probas = cross_val_predict(
     best_model, 
     X_train, 
