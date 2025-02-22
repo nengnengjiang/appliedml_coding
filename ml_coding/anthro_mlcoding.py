@@ -80,21 +80,42 @@ data = pd.read_csv('harmful_data.csv')  # Replace with your actual path
 # -----------------------------------------------------------
 # 2. QUICK EXPLORATION
 # -----------------------------------------------------------
-print("Data Head:")
-print(data.head())
+data.head()
+df.info()
+data.dtypes.value_counts()
+data['label'].value_counts()
 
-print("\nValue Counts of Labels:")
-print(data['label'].value_counts())
+# Timestamp to Day/Hour
+# Convert timestamp column to datetime
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+# Example features
+df['hour'] = df['timestamp'].dt.hour        # numeric
+df['dayofweek'] = df['timestamp'].dt.dayofweek  # 0=Monday, 6=Sunday (numeric)
+df.drop(columns=['timestamp'], inplace=True)
 
-# Check for null or missing values
-print("\nNull values per column:")
-print(data.isnull().sum())
+# category/numerical
+cat_features=df.select_dtypes(object).columns.tolist()
+
+feature1=df.select_dtypes('float64').columns.tolist()
+feature2=df.select_dtypes(int).columns.tolist()
+num_features=feature1+feature2
+
+# -----Check for null or missing values
+data.isnull().sum()
+# missing rate calculation per column
+percent_missing = \
+pd.DataFrame(df['text'].isnull().sum() * 100 / len(df)).reset_index()
+
+#only keep the colums which has less than 50%
+miss_50_minus=percent_missing.loc[percent_missing.missing_rate<50,'columns'].to_list()
+df=df[miss_50_minus]
+
 #df['text'].isnull().sum()
 #df = df.dropna(subset=['label'])
 #df = df.dropna(subset=['text'])
 #df['text'] = df['text'].fillna('')
 
-#check duplicates
+#------check duplicates
 #df = df.drop_duplicates()
 df = df.drop_duplicates(subset=['text'])
 
@@ -169,7 +190,14 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 X_train, X_test, y_train, y_test = train_test_split(
     X_all, y_all,
     test_size=0.2,  # e.g. 80% train, 20% test
-    random_state=42,
+    random_state=77,
+    stratify=y  # helps maintain label distribution
+)
+# ---- optional to create validation data
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train, y_train,
+    test_size=0.2,  # e.g. 80% train, 20% test
+    random_state=77,
     stratify=y  # helps maintain label distribution
 )
 
@@ -185,16 +213,6 @@ print(f"Test set size:  {X_test.shape[0]}")
 # -------------------------------------------------
 # Optional -  Non-textual data preprocessing
 # -------------------------------------------------
-import numpy as np
-
-# Timestamp to Day/Hour
-# Convert timestamp column to datetime
-df['timestamp'] = pd.to_datetime(df['timestamp'])
-# Example features
-df['hour'] = df['timestamp'].dt.hour        # numeric
-df['dayofweek'] = df['timestamp'].dt.dayofweek  # 0=Monday, 6=Sunday (numeric)
-df.drop(columns=['timestamp'], inplace=True)
-
 
 # process numerical and categorical data
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -235,6 +253,10 @@ tfidf = TfidfVectorizer(
 undersampler = RandomUnderSampler(sampling_strategy=0.5, random_state=42)
 xgb_clf = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
 
+# ---- optional using lightgbm
+import lightgbm as lgb
+lgb_model = lgb.LGBMClassifier(n_estimators=100,
+,max_depth=3,random_state=78,verbose=-1,subsample=0.8,colsample_bytree=0.8,min_child_samples=5)
 
 pipeline = ImbPipeline([
     ('undersample', undersampler),
@@ -251,7 +273,8 @@ pipeline = ImbPipeline([
 # Train the pipeline
 pipeline.fit(X_train, y_train)
 
-# 4.1 hyperparameter tuning
+
+# -------- Optional 4.1 hyperparameter tuning
 
 from sklearn.model_selection import GridSearchCV
 
@@ -265,14 +288,15 @@ grid_search = GridSearchCV(
     pipeline,
     param_grid=param_grid,
     scoring='average_precision',  # e.g., PR-AUC
-    cv=3
+    cv=3,
+    verbose = 1
 )
 
 grid_search.fit(X_train, y_train)
-print("Best params:", grid_search.best_params_)
-print("Best CV Score (PR-AUC):", grid_search.best_score_)
-
 best_model = grid_search.best_estimator_
+#print out
+grid_search.best_params_
+grid_search.best_score_
 
 # -----------------------------------------------------------
 # 5. EVALUATION and threshold selection
