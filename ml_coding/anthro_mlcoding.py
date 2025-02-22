@@ -117,7 +117,7 @@ df=df[miss_50_minus]
 
 #------check duplicates
 #df = df.drop_duplicates()
-df = df.drop_duplicates(subset=['text'])
+df = df.drop_duplicates(subset=['prompt', 'label'])
 
 # -------------------------------------------------
 # 2.1. BASIC CLEANING (as an example)
