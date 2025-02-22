@@ -343,6 +343,34 @@ test_f1 = f1_score(y_test, y_test_pred_custom)
 print(f"Final F1 (with custom threshold): {test_f1:.4f}")
 
 
+#----------package the model ---------
+
+import joblib
+
+# Save the pipeline to a file
+joblib.dump(pipeline, 'harmful_detection_pipeline.pkl')
+
+
+#----------load the saved model to use ---------
+import joblib
+import pandas as pd
+
+# Load the pipeline
+loaded_pipeline = joblib.load('harmful_detection_pipeline.pkl')
+
+# Suppose you have new data for inference
+new_data = pd.Series([
+    "This is a test text that might be harmful.",
+    "I love your work, thanks for sharing!"
+])
+
+# 1. Get the probability of the positive class
+y_scores = pipeline.predict_proba(new_data)[:, 1]
+
+# 2. Apply your custom threshold
+custom_threshold = 0.7
+y_pred_custom = (y_scores >= custom_threshold).astype(int)
+
 
 # -----------------------------------------------------------
 # 6. POTENTIAL DEPLOYMENT CONSIDERATIONS
