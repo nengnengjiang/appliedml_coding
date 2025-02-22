@@ -4,8 +4,16 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from imblearn.under_sampling import RandomUnderSampler
 
 # A. TF–IDF
-tfidf = TfidfVectorizer(stop_words='english', max_features=1000)
-X_train_tfidf = tfidf.fit_transform(X_train_raw)  # sparse matrix
+from sklearn.feature_extraction.text import TfidfVectorizer
+from imblearn.under_sampling import RandomUnderSampler
+
+tfidf = TfidfVectorizer(
+    stop_words='english', 
+    max_features=1000  # limit vocab size if needed
+)
+
+# Fit TF–IDF on training set, transform training & test
+X_train_tfidf = tfidf.fit_transform(X_train_raw)
 X_test_tfidf = tfidf.transform(X_test_raw)
 
 # B. Undersample
@@ -17,29 +25,18 @@ X_train_dense = X_train_res.toarray()
 X_test_dense = X_test_tfidf.toarray()
 
 
-#-------Build a PyTorch Dataset & DataLoader
+#-------Build PyTorch tensors
 
 import torch
-from torch.utils.data import Dataset, DataLoader
 
-class TfidfDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.y = torch.tensor(y.values if hasattr(y, 'values') else y, dtype=torch.long)
-    
-    def __len__(self):
-        return len(self.y)
-    
-    def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
+# Convert training features & labels
+X_train_tensor = torch.tensor(X_train_dense, dtype=torch.float32)
+y_train_tensor = torch.tensor(y_train_res.values, dtype=torch.long)
 
-# Create train & test datasets
-train_dataset = TfidfDataset(X_train_dense, y_train_res)
-test_dataset = TfidfDataset(X_test_dense, y_test)
+# Convert test features & labels
+X_test_tensor = torch.tensor(X_test_dense, dtype=torch.float32)
+y_test_tensor = torch.tensor(y_test.values, dtype=torch.long)
 
-# DataLoaders (batch_size is adjustable)
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
 
 
 #---------model defining
@@ -60,7 +57,7 @@ class MLP(nn.Module):
         x = self.fc2(x)  # logits
         return x
 
-input_dim = X_train_dense.shape[1]  # number of features
+input_dim = X_train_tensor.shape[1]  # number of features
 model = MLP(input_dim=input_dim, hidden_dim=50, num_classes=2)
 
 #----------model training
@@ -75,22 +72,17 @@ num_epochs = 5
 
 for epoch in range(num_epochs):
     model.train()
-    running_loss = 0.0
     
-    for X_batch, y_batch in train_loader:
-        X_batch = X_batch.to(device)
-        y_batch = y_batch.to(device)
-        
-        optimizer.zero_grad()
-        logits = model(X_batch)
-        loss = criterion(logits, y_batch)
-        loss.backward()
-        optimizer.step()
-        
-        running_loss += loss.item() * X_batch.size(0)
+    # Forward pass on the entire training set
+    logits = model(X_train_tensor)
+    loss = criterion(logits, y_train_tensor)
     
-    epoch_loss = running_loss / len(train_loader.dataset)
-    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}")
+    # Backprop & update
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    
+    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
 
 
 #=-=---------model eval and threshold selection
@@ -103,22 +95,15 @@ test_probs = []
 test_labels = []
 
 with torch.no_grad():
-    for X_batch, y_batch in test_loader:
-        X_batch = X_batch.to(device)
-        logits = model(X_batch)
-        probs = softmax(logits, dim=1)[:, 1]  # probability of class=1
-        test_probs.append(probs.cpu().numpy())
-        test_labels.append(y_batch.numpy())
-
-test_probs = np.concatenate(test_probs)
-test_labels = np.concatenate(test_labels)
-
+    test_logits = model(X_test_tensor)
+    test_probs = softmax(test_logits, dim=1)[:, 1].numpy()  # prob of class=1
+    
 # PR-AUC
-pr_auc = average_precision_score(test_labels, test_probs)
+test_pr_auc = average_precision_score(y_test_tensor, test_probs)
 print(f"Test PR-AUC: {pr_auc:.4f}")
 
 # Find threshold that maximizes F1 (using test set)
-precision, recall, thresholds = precision_recall_curve(test_labels, test_probs)
+precision, recall, thresholds = precision_recall_curve(y_test_tensor, test_probs)
 f1_scores = 2 * (precision * recall) / (precision + recall + 1e-9)
 best_idx = np.argmax(f1_scores)
 best_threshold = thresholds[best_idx]
@@ -129,7 +114,7 @@ print(f"Precision={precision[best_idx]:.4f}, Recall={recall[best_idx]:.4f}")
 
 # Convert probabilities to 0/1 with custom threshold
 test_preds_custom = (test_probs >= best_threshold).astype(int)
-final_f1 = f1_score(test_labels, test_preds_custom)
+final_f1 = f1_score(y_test_tensor, test_preds_custom)
 print(f"Final F1 with custom threshold on test: {final_f1:.4f}")
 
 
