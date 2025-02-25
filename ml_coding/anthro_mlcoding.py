@@ -139,16 +139,15 @@ data['clean_text'] = data['text'].apply(clean_text) '''
 # We’ll use 'clean_text' as our primary input feature
 
 
+# -----------------------------------------------------------
+# 2.2 convert the text into embeddings
+# -----------------------------------------------------------
 
-
-# # 2.2 convert the text into embeddings
 # import torch
 # from transformers import DistilBertModel, DistilBertTokenizer
 # tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 # model = DistilBertModel.from_pretrained('distilbert-base-uncased')
 # model.eval()  # Put the model in eval mode
-
-# #2.3 define  FUNCTION TO TRANSFORM TEXT INTO EMBEDDINGS
 
 # def text_to_embedding(text, tokenizer, model):
 #     # Tokenize and prepare the inputs
@@ -177,8 +176,9 @@ data['clean_text'] = data['text'].apply(clean_text) '''
 # y_all = df['label'].values
 
 
-
-# ----------- [Optional ] preprocess text data -------------
+# -----------------------------------------------------------
+# 2.3 Preprocess the dirty / messy text data
+# -----------------------------------------------------------
 import string
 # from nltk.corpus import stopwords
 # from nltk.stem import WordNetLemmatizer
@@ -187,6 +187,8 @@ from nltk.tokenize import word_tokenize
 # Prepare stopwords set and lemmatizer once
 # stop_words = set(stopwords.words('english'))
 # lemmatizer = WordNetLemmatizer()
+
+#--------- this is Optional. tfidf later take care of handles tokenization, lowercasing, stopword removal, and punctuation filtering by default.
 
 def preprocess_text(text):
     """
@@ -282,16 +284,13 @@ import lightgbm as lgb
 lgb_model = lgb.LGBMClassifier(n_estimators=100,
 max_depth=3,random_state=78,verbose=-1,subsample=0.8,colsample_bytree=0.8,min_child_samples=5)
 
-pipeline = ImbPipeline([
-    ('undersample', undersampler),
-    ('clf', xgb_clf)
-])
 
 # Optional if uses tfidf
 pipeline = ImbPipeline([
-    ('tfidf' or 'preprocessor', tfidf or preprocessor),
+    ('preprocessor', preprocessor),
+    # ('tfidf', text_transformer),
     ('undersample', undersampler),
-    ('clf', xgb_clf)
+    ('clf', lgb_model)
 ])
 
 
@@ -324,7 +323,8 @@ print(f"Test set size:  {X_test.shape[0]}")
 
 
 
-# Train the pipeline
+# Train the pipeline directly without hyper parameter tuning
+
 pipeline.fit(X_train, y_train)
 
 
@@ -342,8 +342,9 @@ grid_search = GridSearchCV(
     pipeline,
     param_grid=param_grid,
     scoring='average_precision',  # e.g., PR-AUC
-    cv=3,
-    verbose = 1
+    cv=3,  # 3-fold cross-validation
+    verbose=1,
+    n_jobs=-1  # parallelize if desired
 )
 
 grid_search.fit(X_train, y_train)
@@ -355,26 +356,15 @@ grid_search.best_score_
 # -----------------------------------------------------------
 # 5. EVALUATION and threshold selection
 # -----------------------------------------------------------
-from sklearn.model_selection import cross_val_predict
 
-# y_pred = best_model.predict_proba(X_test)[:, 1]
-# or
 y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
-
-y_train_probas = cross_val_predict(
-    best_model, 
-    X_train, 
-    y_train, 
-    cv=3, 
-    method='predict_proba'
-)
-y_train_pred = y_train_probas[:, 1]
+# or
+y_pred_proba = best_model.predict_proba(X_test)[:, 1]
 
 # Evaluate PR-AUC, F1, etc.
 
 from sklearn.metrics import precision_recall_curve, average_precision_score, f1_score
 
-y_test_pred_proba = pipeline.predict_proba(X_test)[:, 1]
 
 pr_auc = average_precision_score(y_train, y_train_pred)
 print(f"Test PR-AUC: {pr_auc:.4f}")
@@ -385,13 +375,6 @@ best_idx = np.argmax(f1_scores)
 best_threshold = thresholds[best_idx]
 print(f"Best F1: {f1_scores[best_idx]:.4f} at threshold={best_threshold:.4f}")
 
-
-#Use the best model and train on entire train set again and then evaluate with best threshold on test set
-best_model.fit(X_train, y_train)
-y_test_probas = best_model.predict_proba(X_test)[:, 1]
-
-# Evaluate final performance with test set
-test_pr_auc = average_precision_score(y_test, y_test_probas)
 
 # And finally, apply that threshold:
 y_test_pred_custom = (y_test_probas >= best_threshold).astype(int)
