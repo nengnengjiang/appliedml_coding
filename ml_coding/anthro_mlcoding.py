@@ -141,74 +141,94 @@ data['clean_text'] = data['text'].apply(clean_text) '''
 
 
 
-# 2.2 convert the text into embeddings
-import torch
-from transformers import DistilBertModel, DistilBertTokenizer
-tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-model = DistilBertModel.from_pretrained('distilbert-base-uncased')
-model.eval()  # Put the model in eval mode
+# # 2.2 convert the text into embeddings
+# import torch
+# from transformers import DistilBertModel, DistilBertTokenizer
+# tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+# model = DistilBertModel.from_pretrained('distilbert-base-uncased')
+# model.eval()  # Put the model in eval mode
 
-#2.3 define  FUNCTION TO TRANSFORM TEXT INTO EMBEDDINGS
+# #2.3 define  FUNCTION TO TRANSFORM TEXT INTO EMBEDDINGS
 
-def text_to_embedding(text, tokenizer, model):
-    # Tokenize and prepare the inputs
-    # return_tensors="pt" means return PyTorch tensors
-    inputs = tokenizer(
-        text,
-        return_tensors='pt',
-        padding=True,
-        truncation=True,
-        max_length=100
-    )
-    # inputs is a dictionary with keys: ['input_ids','attention_mask'] (DistilBert doesn't use token_type_ids)
+# def text_to_embedding(text, tokenizer, model):
+#     # Tokenize and prepare the inputs
+#     # return_tensors="pt" means return PyTorch tensors
+#     inputs = tokenizer(
+#         text,
+#         return_tensors='pt',
+#         padding=True,
+#         truncation=True,
+#         max_length=100
+#     )
+#     # inputs is a dictionary with keys: ['input_ids','attention_mask'] (DistilBert doesn't use token_type_ids)
     
-    with torch.no_grad():
-        outputs = model(**inputs) 
-        # outputs.last_hidden_state => (batch_size, seq_len, hidden_dim)
+#     with torch.no_grad():
+#         outputs = model(**inputs) 
+#         # outputs.last_hidden_state => (batch_size, seq_len, hidden_dim)
     
-    # Use the embedding of the first token [CLS]-like representation
-    last_hidden_states = outputs.last_hidden_state
-    embeddings = last_hidden_states[:, 0, :].squeeze().numpy()
-    return embeddings
+#     # Use the embedding of the first token [CLS]-like representation
+#     last_hidden_states = outputs.last_hidden_state
+#     embeddings = last_hidden_states[:, 0, :].squeeze().numpy()
+#     return embeddings
 
-df['embeddings'] = df['prompt'].apply(lambda x: text_to_embedding(x, tokenizer, model))
+# df['embeddings'] = df['prompt'].apply(lambda x: text_to_embedding(x, tokenizer, model))
 
 # X_all = np.stack(df['embeddings'].values)
 # y_all = df['label'].values
 
-X_all = df.drop(columns=['label']).values
-X_all = df['label'].values
 
-# Optional - define which columns go where
-text_col = 'prompt / test'
-categorical_cols = ['server_name', 'region', 'device', 'ip_country']
-numeric_cols = ['user_tenure','hour','timeofday']  # add more if needed
+
+# ----------- [Optional ] preprocess text data -------------
+import string
+# from nltk.corpus import stopwords
+# from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+
+# Prepare stopwords set and lemmatizer once
+# stop_words = set(stopwords.words('english'))
+# lemmatizer = WordNetLemmatizer()
+
+def preprocess_text(text):
+    """
+    Basic text preprocessing with NLTK:
+    1. Lowercase
+    2. Tokenize
+    3. Remove punctuation tokens
+    4. Remove stopwords
+    5. Lemmatize
+    Returns a cleaned string.
+    """
+    if not isinstance(text, str):
+        return ""
+    
+    # 1. Lowercase
+    text = text.lower()
+    
+    # 2. Tokenize
+    tokens = word_tokenize(text)
+    
+    # 3. Remove punctuation tokens (keep only alphabetic tokens)
+    # tokens = [t for t in tokens if t.isalpha()]
+    
+    # 4. Remove stopwords
+    # tokens = [t for t in tokens if t not in stop_words]
+    
+    # 5. Lemmatize each token
+    # tokens = [lemmatizer.lemmatize(t) for t in tokens]
+    
+    # Join tokens back into a single string
+    cleaned_text = " ".join(tokens)
+    
+    return cleaned_text
+
+df['prompt_content_clean'] = df['prompt_content'].apply(preprocess_text)
+
+df_cleaned = df.drop(columns=['id','completion_content','tenure_bin','length_bin','prompt_content_clean'])
+
+
 
 # -----------------------------------------------------------
-# 3. TRAIN/TEST SPLIT
-# -----------------------------------------------------------
-
-from sklearn.model_selection import train_test_split, GridSearchCV
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X_all, y_all,
-    test_size=0.2,  # e.g. 80% train, 20% test
-    random_state=77,
-    stratify=y  # helps maintain label distribution
-)
-# ---- optional to create validation data
-X_train, X_val, y_train, y_val = train_test_split(
-    X_train, y_train,
-    test_size=0.2,  # e.g. 80% train, 20% test
-    random_state=77,
-    stratify=y  # helps maintain label distribution
-)
-
-print(f"\nTrain set size: {X_train.shape[0]}")
-print(f"Test set size:  {X_test.shape[0]}")
-
-# -----------------------------------------------------------
-# 4. MODELING PIPELINE
+# 3. Data processing and MODELING PIPELINE
 # -----------------------------------------------------------
 # We'll create a pipeline that does both UNDERSAMPLING + CLASSIFICATION
 
@@ -221,13 +241,19 @@ print(f"Test set size:  {X_test.shape[0]}")
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 
-'''
+text_features = 'prompt_content'
+cat_features=df_cleaned.select_dtypes(object).columns.tolist()
+
+feature1=df_cleaned.select_dtypes('float64').columns.tolist()
+feature2=df_cleaned.select_dtypes(int).columns.tolist()
+num_features=feature1+feature2
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 text_transformer = TfidfVectorizer(
     stop_words='english', 
     max_features=1000  # limit vocab size if needed
 )
-'''
+
 categorical_transformer = OneHotEncoder(handle_unknown='ignore')
 numeric_transformer = StandardScaler()
 
@@ -240,26 +266,21 @@ preprocessor = ColumnTransformer(
     remainder='drop'
 )
 
-
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.pipeline import Pipeline as ImbPipeline
-import xgboost as xgb
+# import xgboost as xgb
 
 #if not being able use BERT, use tfidf instead but put it into the pipeline
 # Optional
-from sklearn.feature_extraction.text import TfidfVectorizer
-tfidf = TfidfVectorizer(
-    stop_words='english', 
-    max_features=1000  # limit vocab size if needed
-)
 
-undersampler = RandomUnderSampler(sampling_strategy=0.5, random_state=42)
-xgb_clf = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+
+undersampler = RandomUnderSampler(sampling_strategy='auto', random_state=42)
+# xgb_clf = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
 
 # ---- optional using lightgbm
 import lightgbm as lgb
 lgb_model = lgb.LGBMClassifier(n_estimators=100,
-,max_depth=3,random_state=78,verbose=-1,subsample=0.8,colsample_bytree=0.8,min_child_samples=5)
+max_depth=3,random_state=78,verbose=-1,subsample=0.8,colsample_bytree=0.8,min_child_samples=5)
 
 pipeline = ImbPipeline([
     ('undersample', undersampler),
@@ -272,6 +293,36 @@ pipeline = ImbPipeline([
     ('undersample', undersampler),
     ('clf', xgb_clf)
 ])
+
+
+# -----------------------------------------------------------
+# 4. TRAIN/TEST SPLIT
+# -----------------------------------------------------------
+
+df_cleaned = df.drop(columns=['id','completion_content','tenure_bin','length_bin','prompt_content_clean'])
+X_all = df_cleaned.drop(columns=['label']) 
+y_all = df_cleaned['label'].values
+
+from sklearn.model_selection import train_test_split, GridSearchCV
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_all, y_all,
+    test_size=0.2,  # e.g. 80% train, 20% test
+    random_state=77,
+    stratify=y_all  # helps maintain label distribution
+)
+# ---- optional to create validation data
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train, y_train,
+    test_size=0.2,  # e.g. 80% train, 20% test
+    random_state=77,
+    stratify=y_train  # helps maintain label distribution
+)
+
+print(f"\nTrain set size: {X_train.shape[0]}")
+print(f"Test set size:  {X_test.shape[0]}")
+
+
 
 # Train the pipeline
 pipeline.fit(X_train, y_train)
@@ -308,7 +359,7 @@ from sklearn.model_selection import cross_val_predict
 
 # y_pred = best_model.predict_proba(X_test)[:, 1]
 # or
-#y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
+y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
 
 y_train_probas = cross_val_predict(
     best_model, 
@@ -322,6 +373,8 @@ y_train_pred = y_train_probas[:, 1]
 # Evaluate PR-AUC, F1, etc.
 
 from sklearn.metrics import precision_recall_curve, average_precision_score, f1_score
+
+y_test_pred_proba = pipeline.predict_proba(X_test)[:, 1]
 
 pr_auc = average_precision_score(y_train, y_train_pred)
 print(f"Test PR-AUC: {pr_auc:.4f}")
