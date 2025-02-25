@@ -101,14 +101,17 @@ feature2=df.select_dtypes(int).columns.tolist()
 num_features=feature1+feature2
 
 # -----Check for null or missing values
-data.isnull().sum()
-# missing rate calculation per column
-percent_missing = \
-pd.DataFrame(df['text'].isnull().sum() * 100 / len(df)).reset_index()
+df.isnull().sum()
 
-#only keep the colums which has less than 50%
-miss_50_minus=percent_missing.loc[percent_missing.missing_rate<50,'columns'].to_list()
-df=df[miss_50_minus]
+# missing rate calculation per column
+# Calculate missing percentage for each column
+percent_missing = df.isnull().sum() * 100 / len(df)
+
+# Filter column names where missing percentage is less than 50%
+valid_columns = percent_missing[percent_missing < 50].index.tolist()
+
+# Use only the selected columns
+df = df[valid_columns]
 
 #df['text'].isnull().sum()
 #df = df.dropna(subset=['label'])
