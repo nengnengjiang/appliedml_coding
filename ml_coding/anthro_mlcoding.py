@@ -353,6 +353,10 @@ print(f"Test set size:  {X_test.shape[0]}")
 
 # Train the pipeline directly without hyper parameter tuning
 
+# lgb_model.fit(x_train.values,y_train,eval_set=[(x_val.values,y_val)],eval_metric='average_precision',
+#               categorical_feature=[23],callbacks=[lgb.early_stopping(10)])
+#eval_metrics: ['AUC','ndcg']
+
 pipeline.fit(X_train, y_train)
 
 
