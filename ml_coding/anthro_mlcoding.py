@@ -293,6 +293,9 @@ pipeline = ImbPipeline([
     ('clf', lgb_model)
 ])
 
+#  Check performance on training set
+y_train_pred_proba = pipeline.predict_proba(X_train)[:, 1]
+pr_auc = average_precision_score(y_train, y_train_pred)
 
 # -----------------------------------------------------------
 # 4. TRAIN/TEST SPLIT
@@ -354,7 +357,7 @@ grid_search.best_params_
 grid_search.best_score_
 
 # -----------------------------------------------------------
-# 5. EVALUATION and threshold selection
+# 5. Check performance on test set and threshold selection
 # -----------------------------------------------------------
 
 y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
