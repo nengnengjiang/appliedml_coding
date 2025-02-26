@@ -67,12 +67,37 @@ Discusses potential deployment strategies and monitoring.
 
 import pandas as pd
 import numpy as np
-import torch
+# import torch
 
 # -----------------------------------------------------------
 # 1. LOAD THE DATA
 # -----------------------------------------------------------
 data = pd.read_csv('harmful_data.csv')  # Replace with your actual path
+
+
+# load other format json file
+
+import json
+with open("fake_dataset_10k.json", "r") as f:
+    data = json.load(f)
+    # data = [json.loads(line) for line in file]
+print(len(data), "entries loaded.")
+print(data[0])
+# 2. Convert to DataFrame
+df = pd.DataFrame(data)
+# 3. Optional: Extract the text fields from 'prompt' and 'completion'
+  #  Since 'prompt' is a list of dicts (e.g., [{"role": "user", "content": "..."}]),
+  #  we'll grab the 'content' of the first item.
+df["prompt_content"] = df["prompt"].apply(
+    lambda lst: lst[0]["content"] if isinstance(lst, list) and len(lst) > 0 else None
+)
+df["completion_content"] = df["completion"].apply(
+    lambda lst: lst[0]["content"] if isinstance(lst, list) and len(lst) > 0 else None
+)
+# 4. (Optional) Drop the original 'prompt' and 'completion' columns if you prefer
+df.drop(columns=["prompt", "completion"], inplace=True)
+# 5. Inspect the DataFrame
+print(df.head())
 
 #df = pd.read_json("data.json")
 #df = pd.read_json("data.json", lines=True)
