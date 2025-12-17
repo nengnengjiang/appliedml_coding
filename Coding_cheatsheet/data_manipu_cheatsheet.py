@@ -144,7 +144,7 @@
         df.groupby("customer_id")["dollars"]
         .rolling(7).sum()
         .reset_index(level=0, drop=True)
-)
+        )
 # Join / Merge and Union
 
     # Basic Joins
