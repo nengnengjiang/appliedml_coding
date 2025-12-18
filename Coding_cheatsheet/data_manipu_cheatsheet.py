@@ -148,7 +148,16 @@
         .rolling(7).sum()
         .reset_index(level=0, drop=True) # collapses the MultiIndex that rolling created, so the resulting Series aligns with the original row order
          )
-
+    # Shift by 1 to exclude the current row, then calculate rolling sum
+    # min_periods = 1 make sure no NaN for early rows
+    # shift(1) positive means shift to previous
+    df["roll_7_txn_excl_current"] = (
+        df.groupby("customer_id")["dollars"]
+        .shift(1)  # This moves the data down, so "rolling" sees the 7 previous rows
+        .rolling(window=7, min_periods=1)
+        .sum()
+        .reset_index(level=0, drop=True)
+    )
 
 # Join / Merge and Union
 
