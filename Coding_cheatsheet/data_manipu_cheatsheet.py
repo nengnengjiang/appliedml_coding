@@ -130,6 +130,10 @@
     df = df.sort_values(["customer_id","date"])
     df["prev_dollars"] = df.groupby("customer_id")["dollars"].shift(1)
     df["next_dollars"] = df.groupby("customer_id")["dollars"].shift(-1)
+    # treat first record on lag since no prev record
+    df["prev_dollars"] = df.groupby("customer_id")["dollars"].shift(1).fillna(0)
+    # Or 
+    df["prev_dollars"] = df.groupby("customer_id")["dollars"].shift(1).bfill()
 
     # Cumulative within year (YTD-style)
     df["year"] = df["date"].dt.year
