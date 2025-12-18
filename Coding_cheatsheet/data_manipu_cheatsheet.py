@@ -59,7 +59,7 @@
 
     # Create column with other column's condition
     df["same_industry"] = (df["industry_l"] == df["industry_r"]).astype(int)
-    df["mismatch_tier"] = (df["tier_l"] != df["tier_r"]).astype(int)=
+    df["mismatch_tier"] = (df["tier_l"] != df["tier_r"]).astype(int)
 
     #Rename col
     df = df.rename(columns={"old":"new"})
@@ -162,3 +162,12 @@
 # One-hot Encoding
 
     df_enc = pd.get_dummies(df, columns=["industry","pricing_tier"])
+
+
+
+# mapping
+
+    mapping = {"A":"Enterprise","B":"Mid", "C":"SMB"}
+    df["segment"] = df["pricing_tier"].map(mapping).fillna("Other")
+
+## TO DO, define functions and apply using lambda function
