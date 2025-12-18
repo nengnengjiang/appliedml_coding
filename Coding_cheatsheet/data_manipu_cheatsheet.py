@@ -136,13 +136,16 @@
     df = df.sort_values(["customer_id","year","date"])
     df["ytd_spend"] = df.groupby(["customer_id","year"])["dollars"].cumsum()
 
-    # Rolling window per group (fixed window size by rows)
+    
+    # Rolling 7-row sum per customer: window looks backward (includes current row + 6 previous rows)
     df = df.sort_values(["customer_id","date"])
     df["roll_7_txn"] = (
         df.groupby("customer_id")["dollars"]
         .rolling(7).sum()
-        .reset_index(level=0, drop=True)
+        .reset_index(level=0, drop=True) # collapses the MultiIndex that rolling created, so the resulting Series aligns with the original row order
          )
+
+
 # Join / Merge and Union
 
     # Basic Joins
@@ -166,8 +169,30 @@
 
 
 # mapping
-
     mapping = {"A":"Enterprise","B":"Mid", "C":"SMB"}
     df["segment"] = df["pricing_tier"].map(mapping).fillna("Other")
 
-## TO DO, define functions and apply using lambda function
+    # Numeric bucket mapping via pd.cut
+    # df["dollars"] -> [8, 15, 25] becomes band -> ["<10","10-20",">20"]
+    bins = [-np.inf, 10, 20, np.inf]
+    labels = ["<10", "10-20", ">20"]
+    df["band"] = pd.cut(df["dollars"], bins=bins, labels=labels, right=True)
+
+## Define functions and apply using functions to each row
+    def churn_risk(row):
+        if row["tenure"] < 6 and row["dollars"] < 100:
+            return "high"
+        if row["tenure"] < 12:
+            return "medium"
+        return "low"
+
+    df["churn_risk"] = df.apply(churn_risk, axis=1) # axis=1 means apply to row
+
+
+# string manipulation/checking
+## if strings in col_a appears anywhere in strings in col_b
+    df["A_in_B"] = df["col_a"].str.lower().isin(df["col_b"].str.lower())
+
+
+
+
