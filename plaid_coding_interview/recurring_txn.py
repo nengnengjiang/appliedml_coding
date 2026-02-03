@@ -124,3 +124,19 @@ def _within_min_plus_pct(values, pct):
     return True
 
 
+''' test for the solution '''
+
+txns = [
+    ("Netflix", 9.99, 10),
+    ("Netflix", 9.99, 20),
+    ("Netflix", 9.99, 30),
+    ("Amazon", 27.12, 32),
+    ("Netflix", 9.99, 40),
+    ("Sprint", 50.11, 45),
+    ("Sprint", 50.11, 55),
+    ("Sprint", 50.11, 65),
+    ("Sprint", 60.13, 77),
+]
+
+print(find_recurring_companies_strict(txns))          # ['Netflix', 'Sprint']
+print(find_recurring_companies_tolerant(txns, 0.20))  # ['Netflix', 'Sprint']
