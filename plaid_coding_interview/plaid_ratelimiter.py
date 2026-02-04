@@ -73,8 +73,11 @@ class SlidingWindowRateLimiter:
     def _evict_old(self):
         # Remove executions that slid out of the last 'window_size' seconds
         cutoff = self.t - self.window_size
+        # if the start of the history is older than cutoff we should remove it
         while self.history and self.history[0][0] <= cutoff:
+            # the oldest one gets removed
             _, old_cost = self.history.popleft()
+            # update the window_sum to clean up the space
             self.window_sum -= old_cost
 
     def emitAPI(self):
