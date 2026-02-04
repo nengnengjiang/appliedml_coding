@@ -82,14 +82,15 @@ class Coupon:
     minimum_amount_required: Optional[float]
 
 
-def validate_coupon(c: Coupon) -> None:
+def validate_coupon(Coupon):
     """
     Coupon is invalid if:
     - both percent_discount and amount_discount are None
     - OR both are set
     """
-    has_percent = c.percent_discount is not None
-    has_amount = c.amount_discount is not None
+    c = Coupon
+    has_percent = bool(c.percent_discount)
+    has_amount = bool(c.amount_discount)
 
     # XOR: must be exactly one
     if has_percent == has_amount:
@@ -110,27 +111,23 @@ def cart_total_amount(cart: List[CartItem]) -> float:
     return sum(float(it.price) for it in cart)
 
 
-def cart_meets_minimums(c: Coupon, cart: List[CartItem]) -> bool:
-    """
-    Minimum checks are against the ENTIRE cart (per examples).
-    If a minimum is None, treat it as no constraint.
-    """
-    if c.minimum_num_items_required is not None:
-        if len(cart) < c.minimum_num_items_required:
-            return False
-
-    if c.minimum_amount_required is not None:
-        if cart_total_amount(cart) < c.minimum_amount_required:
-            return False
-
+def cart_meets_minimums(coupon, cart):
+    # Check item count minimum
+    if coupon.minimum_num_items_required and len(cart) < coupon.minimum_num_items_required:
+        return False
+        
+    # Check dollar amount minimum
+    if coupon.minimum_amount_required and cart_total_amount(cart) < coupon.minimum_amount_required:
+        return False
+        
     return True
 
 
 def build_category_subtotals(cart: List[CartItem]) -> Dict[str, float]:
     """Compute subtotal per category for quick lookup."""
-    subtotals: Dict[str, float] = {}
+    subtotals = defaultdict(float)
     for it in cart:
-        subtotals[it.category] = subtotals.get(it.category, 0.0) + float(it.price)
+        subtotals[it.category] += it.price
     return subtotals
 
 
@@ -151,7 +148,7 @@ def compute_savings_for_category(c: Coupon, category: str, cat_subtotals: Dict[s
     return min(c.amount_discount, subtotal)
 
 
-def apply_coupon_total_q1(cart: List[CartItem], coupon: Coupon) -> float:
+def apply_coupon_total_q1(coupon, cart):
     """
     Q1: single coupon applies to exactly one category.
     Return total after applying coupon (if minimums met).
@@ -203,7 +200,7 @@ from collections import Counter
 from typing import Tuple
 
 
-def assert_no_overlapping_categories(coupons: List[Coupon]) -> None:
+def assert_no_overlapping_categories(coupons):
     """
     Interview constraint (per experience 1): if multiple coupons can apply to the same category, error.
     That means across ALL coupons, categories must be unique (no overlap).
@@ -218,7 +215,7 @@ def assert_no_overlapping_categories(coupons: List[Coupon]) -> None:
         raise ValueError(f"Invalid input: multiple coupons cover same category: {overlap}")
 
 
-def best_savings_for_coupon(c: Coupon, cart: List[CartItem], cat_subtotals: Dict[str, float]) -> float:
+def best_savings_for_coupon(coupon, cart):
     """
     For a multi-category coupon, we choose exactly ONE category to maximize savings.
     If cart doesn't meet minimums, savings is 0.
@@ -232,7 +229,7 @@ def best_savings_for_coupon(c: Coupon, cart: List[CartItem], cat_subtotals: Dict
     return best
 
 
-def apply_coupons_total_q2(cart: List[CartItem], coupons: List[Coupon]) -> float:
+def apply_coupons_total_q2(coupon, cart):
     """
     Q2: multiple coupons; each coupon may cover multiple categories,
         but is applied to ONE best category (max savings).
