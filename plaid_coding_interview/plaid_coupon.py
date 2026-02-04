@@ -199,54 +199,43 @@ from typing import Tuple
 
 
 def assert_no_overlapping_categories(coupons):
-    """
-    Interview constraint (per experience 1): if multiple coupons can apply to the same category, error.
-    That means across ALL coupons, categories must be unique (no overlap).
-    """
-    all_cats: List[str] = []
+    seen_categories = set()
     for c in coupons:
-        all_cats.extend(c.categories)
-
-    cnt = Counter(all_cats)
-    overlap = [cat for cat, k in cnt.items() if k > 1]
-    if overlap:
-        raise ValueError(f"Invalid input: multiple coupons cover same category: {overlap}")
+        for cat in c.categories:
+            if cat in seen_categories:
+                raise ValueError(f"Overlap detected for category: {cat}")
+            seen_categories.add(cat)
 
 
-def best_savings_for_coupon(coupon, cart):
-    """
-    For a multi-category coupon, we choose exactly ONE category to maximize savings.
-    If cart doesn't meet minimums, savings is 0.
-    """
-    if not cart_meets_minimums(c, cart):
+def best_savings_for_coupon(coupon, cart, cat_subtotals):
+    # 1. Early exit if cart doesn't meet requirements
+    if not cart_meets_minimums(coupon, cart):
         return 0.0
-
+    
+    # 2. Find the one category that gives the most money back
     best = 0.0
-    for cat in c.categories:
-        best = max(best, compute_savings_for_category(c, cat, cat_subtotals))
+    for cat in coupon.categories:
+        savings = compute_savings(coupon, cat, cat_subtotals)
+        best = max(best, savings)
+        
     return best
 
 
-def apply_coupons_total_q2(coupon, cart):
-    """
-    Q2: multiple coupons; each coupon may cover multiple categories,
-        but is applied to ONE best category (max savings).
-        Also error if coupons overlap in categories.
-    """
-    # validate each coupon first
+def apply_coupons_total_q2(coupons, cart):
+    # 1. Validation and Business Rules
     for c in coupons:
         validate_coupon(c)
-
-    # enforce interview-specific overlap rule
     assert_no_overlapping_categories(coupons)
-
-    total = cart_total_amount(cart)
+    
+    # 2. Setup data
+    total = sum(item.price for item in cart)
     cat_subtotals = build_category_subtotals(cart)
-
+    
+    # 3. Sum up the best savings from each coupon
     total_savings = 0.0
     for c in coupons:
         total_savings += best_savings_for_coupon(c, cart, cat_subtotals)
-
+        
     return total - total_savings
 
 
@@ -264,5 +253,5 @@ if __name__ == "__main__":
         minimum_num_items_required=2,
         minimum_amount_required=20.0,
     )
-    print(apply_coupons_total_q2(cart, [coupon2]))  # expected 19.0
+    print(apply_coupons_total_q2([coupon2], cart))  # expected 19.0
 
