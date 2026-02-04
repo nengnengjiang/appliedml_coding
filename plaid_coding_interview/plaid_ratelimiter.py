@@ -16,44 +16,27 @@ Part2：还要满足 任意连续 w 秒 内执行的 cost 总和 ≤ rate_limit�
 #  Answer to Q1:
 
 from collections import deque
-from typing import List, Deque
 
-
-class RateLimiterPart1:
-    """
-    Part1: per-second budget.
-    - requestAPI(cost): enqueue a request with given cost
-    - emitAPI(): at end of each second, execute as many queued requests as possible
-      such that sum(costs_this_second) <= rate_limit.
-      Must be FIFO: cannot skip the head of the queue.
-    """
-
-    def __init__(self, rate_limit: int):
-        if rate_limit < 0:
-            raise ValueError("rate_limit must be non-negative")
+class RateLimiter:
+    def __init__(self, rate_limit):
         self.rate_limit = rate_limit
-        self.pending: Deque[int] = deque()  # FIFO queue of request costs
+        self.pending = deque()
 
-    def requestAPI(self, cost: int) -> None:
-        if cost < 0:
-            raise ValueError("cost must be non-negative")
-        # We just enqueue; actual execution happens in emitAPI()
+    def requestAPI(self, cost):
+        # Simply add to queue; execution happens in emitAPI
         self.pending.append(cost)
 
-    def emitAPI(self) -> List[int]:
-        """
-        Execute as many requests as possible under this second's budget.
-        Return the list of executed costs in execution order.
-        """
-        executed: List[int] = []
+    def emitAPI(self):
+        executed = []
         budget = self.rate_limit
-
-        # FIFO: only pop from the left; if the head doesn't fit, we stop.
+        
+        # FIFO: check head of queue. If it fits, pop from the pending queue
+        # and put in executed and reduce the budget by the cost.
         while self.pending and self.pending[0] <= budget:
             cost = self.pending.popleft()
             executed.append(cost)
             budget -= cost
-
+            
         return executed
 
 
@@ -100,7 +83,6 @@ class SlidingWindowRateLimiter:
 
         # Step 2: compute how much cost we can still execute
         budget = self.rate_limit - self.window_sum
-
         executed = []
 
         # Step 3: FIFO execution
