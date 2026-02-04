@@ -115,11 +115,25 @@ def cart_meets_minimums(coupon, cart):
     # Check item count minimum
     if coupon.minimum_num_items_required and len(cart) < coupon.minimum_num_items_required:
         return False
-        
     # Check dollar amount minimum
     if coupon.minimum_amount_required and cart_total_amount(cart) < coupon.minimum_amount_required:
         return False
-        
+    return True
+
+# if the minimum requirement is not applied to whole cart but on coupon category only
+
+def cart_meets_minimums(coupon, cart):
+    # 1. Filter items that belong to the categories listed on the coupon
+    matching_items = [it for it in cart if it.category in coupon.categories]
+    # 2. Calculate category-specific totals
+    matching_count = len(matching_items)
+    matching_amount = sum(float(it.price) for it in matching_items)
+    # 3. Check item count minimum against MATCHING items only
+    if coupon.minimum_num_items_required and matching_count < coupon.minimum_num_items_required:
+        return False
+    # 4. Check dollar amount minimum against MATCHING items only
+    if coupon.minimum_amount_required and matching_amount < coupon.minimum_amount_required:
+        return False     
     return True
 
 
