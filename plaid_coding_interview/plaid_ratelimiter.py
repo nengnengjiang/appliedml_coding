@@ -40,7 +40,7 @@ class RateLimiter:
         return executed
 
 
-rl = RateLimiterPart1(rate_limit=5)
+rl = RateLimiter(rate_limit=5)
 rl.requestAPI(3)
 rl.requestAPI(2)
 rl.requestAPI(1)
