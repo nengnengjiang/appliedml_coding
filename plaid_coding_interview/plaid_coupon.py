@@ -106,7 +106,7 @@ def validate_coupon(Coupon):
         raise ValueError("Invalid coupon: amount_discount must be non-negative.")
 
 
-def cart_total_amount(cart: List[CartItem]) -> float:
+def cart_total_amount(cart):
     """Sum of all item prices in the cart."""
     return sum(float(it.price) for it in cart)
 
@@ -123,7 +123,7 @@ def cart_meets_minimums(coupon, cart):
     return True
 
 
-def build_category_subtotals(cart: List[CartItem]) -> Dict[str, float]:
+def build_category_subtotals(cart):
     """Compute subtotal per category for quick lookup."""
     subtotals = defaultdict(float)
     for it in cart:
@@ -131,21 +131,19 @@ def build_category_subtotals(cart: List[CartItem]) -> Dict[str, float]:
     return subtotals
 
 
-def compute_savings_for_category(c: Coupon, category: str, cat_subtotals: Dict[str, float]) -> float:
-    """
-    How much money this coupon saves if applied to this category.
-    - Percent: subtotal * p/100
-    - Amount: min(amount, subtotal)  (can't reduce below 0)
-    """
-    subtotal = cat_subtotals.get(category, 0.0)
+def compute_savings_for_category(coupon, category, cat_subtotals):
+  # Look up how much was spent in this specific category
+    subtotal = cat_subtotals.get(category, 0)
+    
     if subtotal <= 0:
-        return 0.0
-
-    if c.percent_discount is not None:
-        return subtotal * (c.percent_discount / 100.0)
-
-    # amount_discount is not None here due to validation
-    return min(c.amount_discount, subtotal)
+        return 0
+    
+    # Calculate savings based on the coupon type
+    if coupon.percent_discount:
+        return subtotal * (coupon.percent_discount / 100)
+    
+    # If not percent, it's a flat amount discount
+    return min(coupon.amount_discount, subtotal)
 
 
 def apply_coupon_total_q1(coupon, cart):
