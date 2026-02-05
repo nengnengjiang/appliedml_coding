@@ -55,148 +55,78 @@ Q2（多 category + 多 coupons）
 
   ‘’‘
 
-  ’‘’Q1 code'''
-
-from dataclasses import dataclass
-from typing import List, Optional, Dict
-
-
-@dataclass(frozen=True)
-class CartItem:
-    price: float
-    category: str
-
-
-@dataclass(frozen=True)
-class Coupon:
-    # Q1: 只会有一个 category（面试口述常见是 valid_category）
-    # 我们先用 categories[0] 来兼容后续 Q2 的多 category
-    categories: List[str]
-
-    # Exactly one of these must be non-null
-    percent_discount: Optional[float]  # e.g. 20 means 20% off
-    amount_discount: Optional[float]   # e.g. 6 means $6 off (one-time for that category subtotal)
-
-    # These can be null or non-null; check against the ENTIRE cart
-    minimum_num_items_required: Optional[int]
-    minimum_amount_required: Optional[float]
-
-
-def validate_coupon(Coupon):
-    """
-    Coupon is invalid if:
-    - both percent_discount and amount_discount are None
-    - OR both are set
-    """
-    c = Coupon
-    has_percent = bool(c.percent_discount)
-    has_amount = bool(c.amount_discount)
-
-    # XOR: must be exactly one
-    if has_percent == has_amount:
-        raise ValueError("Invalid coupon: must set exactly one of percent_discount or amount_discount.")
-
-    if not c.categories:
-        raise ValueError("Invalid coupon: categories must be non-empty.")
-
-    # Optional sanity checks
-    if has_percent and c.percent_discount < 0:
-        raise ValueError("Invalid coupon: percent_discount must be non-negative.")
-    if has_amount and c.amount_discount < 0:
-        raise ValueError("Invalid coupon: amount_discount must be non-negative.")
-
-
-def cart_total_amount(cart):
-    """Sum of all item prices in the cart."""
-    return sum(float(it.price) for it in cart)
-
-
-def cart_meets_minimums(coupon, cart):
-    # Check item count minimum
-    if coupon.minimum_num_items_required and len(cart) < coupon.minimum_num_items_required:
-        return False
-    # Check dollar amount minimum
-    if coupon.minimum_amount_required and cart_total_amount(cart) < coupon.minimum_amount_required:
-        return False
-    return True
-
-# if the minimum requirement is not applied to whole cart but on coupon category only
-
-def cart_meets_minimums(coupon, cart):
-    # 1. Filter items that belong to the categories listed on the coupon
-    matching_items = [it for it in cart if it.category in coupon.categories]
-    # 2. Calculate category-specific totals
-    matching_count = len(matching_items)
-    matching_amount = sum(float(it.price) for it in matching_items)
-    # 3. Check item count minimum against MATCHING items only
-    if coupon.minimum_num_items_required and matching_count < coupon.minimum_num_items_required:
-        return False
-    # 4. Check dollar amount minimum against MATCHING items only
-    if coupon.minimum_amount_required and matching_amount < coupon.minimum_amount_required:
-        return False     
-    return True
-
-
-def build_category_subtotals(cart):
-    """Compute subtotal per category for quick lookup."""
-    subtotals = defaultdict(float)
-    for it in cart:
-        subtotals[it.category] += it.price
-    return subtotals
-
-
-def compute_savings_for_category(coupon, category, cat_subtotals):
-  # Look up how much was spent in this specific category
-    subtotal = cat_subtotals.get(category, 0)
-    
-    if subtotal <= 0:
-        return 0
-    
-    # Calculate savings based on the coupon type
-    if coupon.percent_discount:
-        return subtotal * (coupon.percent_discount / 100)
-    
-    # If not percent, it's a flat amount discount
-    return min(coupon.amount_discount, subtotal)
-
+  ’‘’Q1 answer code'''
 
 def apply_coupon_total_q1(coupon, cart):
-    """
-    Q1: single coupon applies to exactly one category.
-    Return total after applying coupon (if minimums met).
-    """
-    validate_coupon(coupon)
+    
+  # 1. Validation (Keep it brief)
+    if (coupon.percent_discount is None) == (coupon.amount_discount is None):
+        raise ValueError("Must set exactly one discount type.")
+    
+    # 2. Scope: Calculate totals for the specific category AND total cart
+    target_cat = coupon.categories[0]
+    cat_subtotal = 0
+    total_amount = 0
+    
+    for item in cart:
+        total_amount += item.price
+        if item.category == target_cat:
+            cat_subtotal += item.price
 
-    total = cart_total_amount(cart)
+    # 3. Check Minimums (Standard Requirement: Entire Cart)
+    if coupon.minimum_num_items_required and len(cart) < coupon.minimum_num_items_required:
+        return total_amount
+    if coupon.minimum_amount_required and total_amount < coupon.minimum_amount_required:
+        return total_amount
 
-    # If minimum requirements are not met, coupon doesn't apply
-    if not cart_meets_minimums(coupon, cart):
-        return total
-
-    # In Q1, we assume one category; use categories[0]
-    target_category = coupon.categories[0]
-
-    cat_subtotals = build_category_subtotals(cart)
-    savings = compute_savings_for_category(coupon, target_category, cat_subtotals)
-
-    return total - savings
+    # 4. Calculate Savings
+    if coupon.percent_discount:
+        savings = cat_subtotal * (coupon.percent_discount / 100)
+    else:
+        savings = min(cat_subtotal, coupon.amount_discount)
+        
+    return total_amount - savings
 
 
-# ---- Quick sanity test (matches interview experience 1, Q1) ----
+# ---- Quick Unit  test (matches interview experience 1, Q1) ----
+
+
+# Simple Mock Classes (if not already defined)
+class CartItem:
+    def __init__(self, price, category):
+        self.price = price
+        self.category = category
+
+class Coupon:
+    def __init__(self, categories, percent_discount, amount_discount, min_items, min_amount):
+        self.categories = categories
+        self.percent_discount = percent_discount
+        self.amount_discount = amount_discount
+        self.minimum_num_items_required = min_items
+        self.minimum_amount_required = min_amount
+      
+
 if __name__ == "__main__":
+    # 1. Setup Data
     cart = [
         CartItem(2.0, "electronics"),
         CartItem(5.0, "kitchen"),
         CartItem(15.0, "food"),
     ]
-    coupon = Coupon(
-        categories=["electronics"],
-        percent_discount=20,
-        amount_discount=None,
-        minimum_num_items_required=2,
-        minimum_amount_required=20.0,
+    
+    coupon_q1 = Coupon(
+        categories=["electronics"], 
+        percent_discount=20, 
+        amount_discount=None, 
+        min_items=2, 
+        min_amount=20.0
     )
-    print(apply_coupon_total_q1(cart, coupon))  # expected 21.6
+
+    # 2. Run and Print
+    apply_coupon_total_q1(cart, coupon_q1)  # Expected: 21.6
+
+
+
 
 '''
 Q2 变化点本质只有 3 个：
@@ -208,64 +138,80 @@ Q2 变化点本质只有 3 个：
 多张 coupon 的 categories 不能重叠（面经的怪规则）→ 重叠直接报错
 '''
 
-from collections import Counter
-from typing import Tuple
-
-
+# 1. The Validation Helper (Overlapping Categories)
+# Before doing any math, you need to ensure no two coupons share a category.
 def assert_no_overlapping_categories(coupons):
     seen_categories = set()
-    for c in coupons:
-        for cat in c.categories:
+    for coupon in coupons:
+        for cat in coupon.categories:
             if cat in seen_categories:
-                raise ValueError(f"Overlap detected for category: {cat}")
+                raise ValueError(f"Duplicate category found across coupons: {cat}")
             seen_categories.add(cat)
 
+# The Requirements Check (New)
+# You need this function to handle the requirement that minimums apply only to the categories listed on the coupon.
+def cart_meets_minimums(coupon, cart):
+    # Filter for items that belong to the coupon's categories
+    matching_items = [it for it in cart if it.category in coupon.categories]
+    matching_count = len(matching_items)
+    matching_amount = sum(it.price for it in matching_items)
 
-def best_savings_for_coupon(coupon, cart, cat_subtotals):
-    # 1. Early exit if cart doesn't meet requirements
-    if not cart_meets_minimums(coupon, cart):
-        return 0.0
-    
-    # 2. Find the one category that gives the most money back
-    best = 0.0
-    for cat in coupon.categories:
-        savings = compute_savings(coupon, cat, cat_subtotals)
-        best = max(best, savings)
-        
-    return best
+    if coupon.minimum_num_items_required and matching_count < coupon.minimum_num_items_required:
+        return False
+    if coupon.minimum_amount_required and matching_amount < coupon.minimum_amount_required:
+        return False
+    return True
 
 
 def apply_coupons_total_q2(coupons, cart):
-    # 1. Validation and Business Rules
-    for c in coupons:
-        validate_coupon(c)
+    # 1. Validation
     assert_no_overlapping_categories(coupons)
     
-    # 2. Setup data
-    total = sum(item.price for item in cart)
-    cat_subtotals = build_category_subtotals(cart)
+    # 2. Setup subtotals
+    total_cart_value = sum(item.price for item in cart)
+    category_subtotals = {}
+    for item in cart:
+        category_subtotals[item.category] = category_subtotals.get(item.category, 0) + item.price
     
-    # 3. Sum up the best savings from each coupon
+    # 3. Calculate total savings
     total_savings = 0.0
-    for c in coupons:
-        total_savings += best_savings_for_coupon(c, cart, cat_subtotals)
+    for coupon in coupons:
+        if not cart_meets_minimums(coupon, cart):
+            continue
+            
+        # Find the one category under this coupon that gives the most savings
+        coupon_best = 0.0
+        for cat in coupon.categories:
+            subtotal = category_subtotals.get(cat, 0)
+            if coupon.percent_discount:
+                savings = subtotal * (coupon.percent_discount / 100)
+            else:
+                savings = min(subtotal, coupon.amount_discount)
+            coupon_best = max(coupon_best, savings)
         
-    return total - total_savings
+        total_savings += coupon_best
+        
+    return total_cart_value - total_savings
 
 
 # ---- Quick sanity test (matches interview experience 1, Q2 single coupon multi category) ----
-if __name__ == "__main__":
-    cart = [
-        CartItem(2.0, "electronics"),
-        CartItem(5.0, "kitchen"),
-        CartItem(15.0, "food"),
-    ]
-    coupon2 = Coupon(
-        categories=["electronics", "food"],
-        percent_discount=20,
-        amount_discount=None,
-        minimum_num_items_required=2,
-        minimum_amount_required=20.0,
-    )
-    print(apply_coupons_total_q2([coupon2], cart))  # expected 19.0
+
+# Setup Q2 Coupons to test
+
+    #     coupon_q1 = Coupon(
+    #     categories=["electronics"], 
+    #     percent_discount=20, 
+    #     amount_discount=None, 
+    #     min_items=2, 
+    #     min_amount=20.0
+      
+    c_elec = Coupon(["electronics"], None, 1.0, 1, 1.0) # $1 off electronics
+    c_food = Coupon(["food"], 10, None, 1, 1.0)        # 10% off food ($15 * 0.1 = 1.5)
+    
+    coupons = [c_elec, c_food]
+
+    # 4. Run and Print
+
+    # Total cart is 22.0. Total savings: 1.0 + 1.5 = 2.5. Expected: 19.5
+    apply_coupons_total_q2(coupons, cart) ")# expected 19.0
 
